@@ -2,7 +2,12 @@
 
 **English** | [简体中文](README.zh.md)
 
+[![Test](https://github.com/Hope-Phenom/dsh-plugin-notify/actions/workflows/test.yml/badge.svg)](https://github.com/Hope-Phenom/dsh-plugin-notify/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 A standard [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) plugin that posts a **desktop notification whenever a turn ends**.
+
+> Repository: [github.com/Hope-Phenom/dsh-plugin-notify](https://github.com/Hope-Phenom/dsh-plugin-notify)
 
 It is the notification feature of the old DSH tray helper (DshNotifyicon), re-implemented as a standalone plugin. It needs **no tray process** and no `DSH_NOTIFY` stdout protocol: the plugin runs inside the Host, subscribes to `session/event`, and therefore works however DSH was started (tray helper, `dsh web`, desktop app).
 

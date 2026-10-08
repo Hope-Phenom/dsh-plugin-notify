@@ -12,6 +12,14 @@
   ],
   "license": "MIT",
   "author": "Hope-Phenom",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Hope-Phenom/dsh-plugin-notify.git"
+  },
+  "homepage": "https://github.com/Hope-Phenom/dsh-plugin-notify#readme",
+  "bugs": {
+    "url": "https://github.com/Hope-Phenom/dsh-plugin-notify/issues"
+  },
   "type": "module",
   "icon": "./assets/icon.svg",
   "exports": {

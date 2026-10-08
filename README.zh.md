@@ -2,7 +2,12 @@
 
 [English](README.md) | **简体中文**
 
+[![Test](https://github.com/Hope-Phenom/dsh-plugin-notify/actions/workflows/test.yml/badge.svg)](https://github.com/Hope-Phenom/dsh-plugin-notify/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 一个标准的 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）插件：**每轮回答结束时发一条桌面通知**。
+
+> 仓库：[github.com/Hope-Phenom/dsh-plugin-notify](https://github.com/Hope-Phenom/dsh-plugin-notify)
 
 它把原先 DSH 托盘助手（DshNotifyicon）里的「通知增强」抽了出来，作为独立插件实现——**不需要托盘程序**，也**不需要**再往 dsh 的 stdout 里打 `DSH_NOTIFY` 协议行：插件本身就跑在 Host 里，直接订阅 `session/event`，所以它在任何启动方式下都生效（托盘工具、`dsh web`、桌面端都一样）。
 

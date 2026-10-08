@@ -1,0 +1,16 @@
+###############################################################################
+# Normalize line endings. The notifier scripts are read by Python and by
+# PowerShell on Windows, macOS and Linux alike, so the repository keeps every
+# text file at LF instead of letting a Windows checkout rewrite them.
+###############################################################################
+* text=auto eol=lf
+
+###############################################################################
+# Binary assets
+###############################################################################
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.icns binary

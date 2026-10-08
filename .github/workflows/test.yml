@@ -1,0 +1,43 @@
+name: test
+
+on:
+  push:
+    branches: [ master ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-latest, macos-latest, ubuntu-latest ]
+        node: [ '18', '22' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # Covers the pure logic, the settings store, the interpreter probes and
+      # both notifier scripts' per-platform branches (the macOS and Linux
+      # branches are real here, not simulated).
+      - name: Unit tests
+        run: node --test
+
+      - name: Notifier fallback chain (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/check-backends.py
+
+      - name: Notifier fallback chain (macOS / Linux)
+        if: runner.os != 'Windows'
+        run: python3 tools/check-backends.py
