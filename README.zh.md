@@ -25,14 +25,27 @@
 
 先决条件：DSH 桌面端或 `dsh web` 已经在用某个 profile（本文以 `desktop` 为例）。
 
-**方式 A：界面安装（推荐）**
+**方式 A：从 npm 安装（推荐）**
+
+1. 打开侧边栏 **插件** 页 → 安装 → 输入包名 `@hope_phenom/dsh-plugin-notify`。
+2. 安装完成后点 **立即启用**（新装的 bundle 通过 HMR 直接生效，界面没反应就重启一次 DSH）。
+3. 打开 **设置 → 通知** 开始配置。
+
+也可以走命令行（同样需要先完全退出 DSH 桌面端）：
+
+```powershell
+& "C:\Users\<你>\AppData\Local\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd" `
+  plugin --profile desktop add @hope_phenom/dsh-plugin-notify
+```
+
+**方式 B：界面安装本地目录**
 
 1. 打开侧边栏 **插件** 页 → 安装 → 选择「本地目录」，填入本仓库的绝对路径（例如 `F:\WorkSpace\dsh-plugin-notify`）。
 2. 安装完成后点 **立即启用**。
 3. 新安装的 bundle 会通过 HMR 直接生效；如果界面没反应，重启一次 DSH。
 4. 打开 **设置 → 通知** 开始配置。
 
-**方式 B：命令行安装**
+**方式 C：命令行安装本地目录**
 
 ```powershell
 # 需要先完全退出 DSH 桌面端：profile 目录在运行时被加锁
@@ -40,7 +53,7 @@
   plugin --profile desktop add "F:\WorkSpace\dsh-plugin-notify"
 ```
 
-> - 路径一律用**绝对路径**（相对路径按调用目录解析，裸目录名会被当成 npm 包名）。
+> - 本地目录一律用**绝对路径**（相对路径按调用目录解析，裸目录名会被当成 npm 包名）。
 > - `desktop` profile 只能由桌面端自己的 `dsh.cmd` 管理，因此必须用上面这个路径调用。
 > - 安装新 bundle 可以热生效；**替换**已装的同名包必须重启进程才能加载新的 JS 模块代。
 

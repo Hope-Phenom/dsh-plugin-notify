@@ -25,14 +25,27 @@ It is the notification feature of the old DSH tray helper (DshNotifyicon), re-im
 
 Prerequisite: DSH (desktop app or `dsh web`) already runs a profile — `desktop` below.
 
-**Option A — from the UI (recommended)**
+**Option A — from npm (recommended)**
+
+1. Open the sidebar **Plugins** page → Install → enter the package name `@hope_phenom/dsh-plugin-notify`.
+2. Click **Enable now** when the install finishes (a newly installed bundle activates through HMR; restart DSH if the UI does not react).
+3. Configure it under **Settings → Notifications**.
+
+The command line works too (quit the DSH desktop app first):
+
+```powershell
+& "C:\Users\<you>\AppData\Local\Programs\DeepSeek Harness\resources\runtime\cli\bin\dsh.cmd" `
+  plugin --profile desktop add @hope_phenom/dsh-plugin-notify
+```
+
+**Option B — install a local directory from the UI**
 
 1. Open the sidebar **Plugins** page → Install → choose the local-directory option and give this repository's absolute path (for example `F:\WorkSpace\dsh-plugin-notify`).
 2. When the install finishes, click **Enable now**.
 3. A newly installed bundle activates through HMR; restart DSH if the UI does not react.
 4. Configure it under **Settings → Notifications**.
 
-**Option B — from the command line**
+**Option C — install a local directory from the command line**
 
 ```powershell
 # Quit the DSH desktop app first: it holds a lock on the profile directory.
