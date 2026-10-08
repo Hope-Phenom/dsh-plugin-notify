@@ -9,7 +9,8 @@
 ## 特性
 
 - **轮次结束即通知**（`turn/end`），子代理/子任务完成可选一并通知
-- **自动挑通道**：检测到 Python 就用内置 Python 脚本；没有 Python 就回退到内置 PowerShell 气泡通知——开箱即用，不需要你先配任何东西
+- **自动挑通道**：检测到 Python 就用内置 Python 脚本；没有 Python 就回退到内置 PowerShell 通知器——开箱即用，不需要你先配任何东西
+- **跨平台**：Windows 用系统气泡/WinRT Toast，macOS 用 `osascript`，Linux 用 `notify-send`（见下方平台支持）
 - **完全可自定义**：任意可执行文件 + 参数模板（占位符），等价于旧托盘工具的「外部命令」
 - **自带设置页**：DSH 设置里的独立一项「通知」，含通道选择、解释器/脚本路径、参数模板、文案模板、实时预览、测试通知与投递统计
 - **不打扰**：可设最短时长阈值（很短的回合不通知）、通知进程超时保护
@@ -95,8 +96,28 @@
 
 ### 内置脚本的回退顺序
 
-`notify.py` 依次尝试：**notifypy** → **win11toast** → 同目录的 **notify.ps1**。前两个是可选的第三方库，没装也能跑（纯标准库）。
-`notify.ps1` 先用 Windows Shell 通知（`Shell_NotifyIcon` 气泡，Win10/11 会显示为系统通知，无需注册 AppUserModelID），失败再退到 WinRT Toast。
+`notify.py` 先试 **notifypy**（Windows/macOS/Linux 都自带通知器），再按平台试 **win11toast**（Windows）、**osascript**（macOS）、**notify-send**（Linux），最后同目录的 **notify.ps1**。除标准库以外全是可选的：装上就用，没装就跳过。
+
+`notify.ps1` 是**跨平台分发器**：Windows 上点源同目录的 `notify.windows.ps1`（先 `Shell_NotifyIcon` 气泡，Win10/11 显示为系统通知、无需注册 AppUserModelID，失败再退 WinRT Toast）；macOS 上转交 `osascript`；Linux 上转交 `notify-send`。只有 Windows 分支才会被解析，因此这里不会在别的平台上碰到 Windows 专属 API。
+
+两个脚本都能「只报告不发送」地打印将要执行的命令，用来在任意机器上核对别的平台会跑什么：
+
+```powershell
+python scripts/notify.py --dry-run --platform macOS --title T --message M
+python scripts/notify.py --dry-run --backend notify-send --title T --message M
+pwsh -File scripts/notify.ps1 -DryRun -Platform Linux -Title T -Message M
+```
+
+### 平台支持
+
+| 能力 | Windows | macOS | Linux |
+|---|---|---|---|
+| 插件加载 / 检测 / 设置页 | ✅ | ✅ | ✅ |
+| Python 通道 | ✅ notifypy 或内置 ps1 | ✅ 内置 osascript 后端（装了 notifypy 则优先） | ✅ 内置 notify-send 后端（装了 notifypy 则优先） |
+| PowerShell 通道 | ✅ 内置气泡/WinRT | ✅ 装了 pwsh 即可，转交 osascript | ✅ 装了 pwsh 即可，转交 notify-send |
+| 自定义命令通道 | ✅ | ✅（常用 `osascript`） | ✅（常用 `notify-send`） |
+
+探测解释器时 Windows 会跳过 Microsoft Store 的 `python.exe` 别名、macOS 会跳过 `/usr/bin` 下的系统 shim 并直接探测真实路径——避免探测动作本身弹商店页面或「安装开发者工具」对话框。
 
 ## 配置存储
 
@@ -123,19 +144,21 @@ dsh-plugin-notify/
 │  ├─ core.js            纯逻辑：设置归一化、模板/argv 展开、文案组合、通道解析
 │  ├─ index.js           Host 半边：设置文件、session/event、进程投递、/api/dsh/dsh-plugin-notify 路由
 │  └─ client.js          浏览器半边：设置页（无构建步骤，react 由浏览器模块表提供）
-├─ scripts/notify.py     内置 Python 通知器
-├─ scripts/notify.ps1    内置 PowerShell 通知器
+├─ scripts/notify.py     内置 Python 通知器（多平台）
+├─ scripts/notify.ps1    内置 PowerShell 通知器（按平台分发的跨平台入口）
+├─ scripts/notify.windows.ps1  Windows 专属实现（气泡 + WinRT Toast）
 ├─ locale/{en,zh}.json   插件卡片显示名与描述
 └─ test/ + tools/smoke.mjs
 ```
 
 ```powershell
-npm test                       # 12 个单元测试（核心逻辑 + 配置读写 + 进程执行 + Python 探测）
+npm test                       # 22 个单元测试（核心逻辑、配置读写、进程执行、Python 探测、两个脚本的跨平台分支）
+python tools/check-backends.py # 逐平台核对回退链（模拟缺 notifypy / 缺工具的场景）
 npm run smoke                  # 端到端：真 HTTP 路由 + 轮次管线 + 把设置页真实渲染一遍
-npm run smoke -- --notify      # 额外真发一条桌面通知
+npm run smoke -- --notify      # 额外用 auto / python / powershell 三条通道各真发一条桌面通知
 ```
 
-冒烟脚本不需要安装进 DSH 就能跑：它起一个真 HTTP server 挂上插件的路由、用真 `fetch` 驱动全部动作、用迷你 hook 运行时把设置页渲染出来（并用严格字典校验，缺任何一条中英文文案都会失败）。
+冒烟脚本不需要安装进 DSH 就能跑：它起一个真 HTTP server 挂上插件的路由、用真 `fetch` 驱动全部动作、用迷你 hook 运行时把设置页渲染出来（并用严格字典校验，缺任何一条中英文文案都会失败）。两个通知脚本的 macOS/Linux 分支用 `--dry-run` 在任意平台上核对，不必等一台 Mac。
 
 ### 两个刻意的设计取舍
 
@@ -148,7 +171,7 @@ npm run smoke -- --notify      # 额外真发一条桌面通知
 - 通知依赖设置页里配置的解释器/脚本真实存在；路径写错时设置页会在状态条上点名，但不会替你安装 Python。
 - 通知进程超时会被强杀（默认 15 s），因此不会堆积。
 - 不做「仅窗口失焦时通知」：Host 侧拿不到前端焦点状态，需要的话请用最短时长阈值或干脆关掉托盘气泡。
-- 非 Windows 平台只能用 Python 通道（内置 PowerShell 脚本是 Windows 专用的）。
+- macOS 上 Python 通道优先用 `notifypy`，没装就自动改用系统自带的 `osascript`（图标不支持）；完全不想装 Python 就装 `pwsh` 走 PowerShell 通道。Linux 同理（`notify-send`）。
 
 ## 许可证
 

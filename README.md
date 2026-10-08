@@ -13,6 +13,7 @@ It is the notification feature of the old DSH tray helper (DshNotifyicon), re-im
 - **Fully customizable**: any executable plus an argument template with placeholders, the equivalent of the tray helper's external command.
 - **Its own Settings page**: a dedicated "Notifications" section with channel selection, interpreter/script paths, argument and text templates, a live preview, a test send, and delivery statistics.
 - **Quiet by design**: a minimum-duration threshold and a hard timeout on the notifier process.
+- **Cross-platform**: Windows system balloon / WinRT toast, macOS `osascript`, Linux `notify-send` (see the platform matrix below).
 - **Atomic configuration**: a damaged settings file falls back to defaults with a visible explanation instead of breaking the plugin.
 
 ## Install
@@ -95,8 +96,28 @@ That script used `notifypy`; the bundled script prefers `notifypy` too, so behav
 
 ### Bundled notifier fallbacks
 
-`notify.py` tries **notifypy** → **win11toast** → the sibling **notify.ps1**. The first two are optional third-party libraries; the script runs on a bare Python.
-`notify.ps1` uses a Windows Shell notification (`Shell_NotifyIcon` balloon, shown as a normal Windows 10/11 notification and needing no registered AppUserModelID), falling back to a WinRT toast.
+`notify.py` tries **notifypy** first (it ships a notifier for Windows, macOS and Linux), then the platform's own tool — **win11toast** on Windows, **osascript** on macOS, **notify-send** on Linux — and finally the sibling **notify.ps1**. Everything beyond the standard library is optional: used when installed, skipped when not.
+
+`notify.ps1` is a **cross-platform dispatcher**: on Windows it dot-sources `notify.windows.ps1` (a `Shell_NotifyIcon` balloon, shown as a normal Windows 10/11 notification and needing no registered AppUserModelID, falling back to a WinRT toast); on macOS it hands over to `osascript`; on Linux to `notify-send`. Only the Windows branch is ever parsed, so no Windows-only API is touched elsewhere.
+
+Both scripts can report the command they *would* run without sending anything, which is how another platform's branch is checked from any machine:
+
+```powershell
+python scripts/notify.py --dry-run --platform macOS --title T --message M
+python scripts/notify.py --dry-run --backend notify-send --title T --message M
+pwsh -File scripts/notify.ps1 -DryRun -Platform Linux -Title T -Message M
+```
+
+### Platform support
+
+| Capability | Windows | macOS | Linux |
+|---|---|---|---|
+| Plugin load / detection / Settings page | ✅ | ✅ | ✅ |
+| Python channel | ✅ notifypy or the bundled ps1 | ✅ built-in osascript backend (notifypy preferred when installed) | ✅ built-in notify-send backend (notifypy preferred when installed) |
+| PowerShell channel | ✅ bundled balloon/WinRT | ✅ with pwsh installed, forwards to osascript | ✅ with pwsh installed, forwards to notify-send |
+| Custom command channel | ✅ | ✅ (commonly `osascript`) | ✅ (commonly `notify-send`) |
+
+Interpreter detection skips Windows' Microsoft Store `python.exe` aliases and macOS's `/usr/bin` system shims, probing the real path instead — so detection itself never opens a Store page or an "install developer tools" dialog.
 
 ## Configuration storage
 
@@ -123,19 +144,21 @@ dsh-plugin-notify/
 │  ├─ core.js            pure logic: settings normalization, template/argv expansion, text composition, channel resolution
 │  ├─ index.js           Host half: settings file, session/event, process delivery, /api/dsh/dsh-plugin-notify route
 │  └─ client.js          browser half: the Settings page (no build step; react comes from the browser module table)
-├─ scripts/notify.py     bundled Python notifier
-├─ scripts/notify.ps1    bundled PowerShell notifier
+├─ scripts/notify.py     bundled Python notifier (multi-platform)
+├─ scripts/notify.ps1    bundled PowerShell notifier (cross-platform entry point)
+├─ scripts/notify.windows.ps1  the Windows-only implementation (balloon + WinRT toast)
 ├─ locale/{en,zh}.json   plugin card title and description
 └─ test/ + tools/smoke.mjs
 ```
 
 ```powershell
-npm test                       # 12 unit tests (core logic, settings IO, process running, Python detection)
+npm test                       # 22 unit tests (core logic, settings IO, process running, Python detection, both scripts' platform branches)
+python tools/check-backends.py # per-platform fallback chain, with missing libraries simulated
 npm run smoke                  # end to end: real HTTP route + turn pipeline + a real render of the Settings page
-npm run smoke -- --notify      # additionally sends one real desktop notification
+npm run smoke -- --notify      # additionally sends one real notification through each of auto / python / powershell
 ```
 
-The smoke run needs no DSH installation: it starts a real HTTP server with the plugin's route, drives every action with real `fetch` calls, and renders the Settings page through a minimal hook runtime using a strict locale reader — so a missing string in either language fails the run.
+The smoke run needs no DSH installation: it starts a real HTTP server with the plugin's route, drives every action with real `fetch` calls, and renders the Settings page through a minimal hook runtime using a strict locale reader — so a missing string in either language fails the run. The macOS and Linux branches of both notifier scripts are checked with `--dry-run` from any platform, no Mac required.
 
 ### Two deliberate design choices
 
@@ -148,7 +171,7 @@ The smoke run needs no DSH installation: it starts a real HTTP server with the p
 - The configured interpreter and script must exist. The Settings page names a bad path but will not install Python for you.
 - A notifier that exceeds the timeout is killed (15 s by default), so failures cannot pile up.
 - No "only when the window is unfocused" mode: the Host cannot see front-end focus. Use the minimum-duration threshold instead.
-- Outside Windows only the Python channel applies; the bundled PowerShell notifier is Windows-specific.
+- On macOS the Python channel prefers `notifypy` and falls back to the system `osascript` (icons are not supported). To avoid Python entirely, install `pwsh` and use the PowerShell channel. Linux behaves the same way through `notify-send`.
 
 ## License
 

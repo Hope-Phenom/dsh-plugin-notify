@@ -1,15 +1,23 @@
 # Desktop notification helper shipped with @hope_phenom/dsh-plugin-notify.
 #
-# Primary path: a Windows Shell notification (Shell_NotifyIcon balloon), which
-# Windows 10/11 surface as a normal notification and which needs no registered
-# AppUserModelID. Fallback: a WinRT toast, for the rare host where the balloon
-# path is unavailable.
+# This file is a dispatcher. It resolves the notification plan for the current
+# platform and only then touches the platform-specific implementation, so a
+# Windows-only API is never even parsed where it does not exist:
 #
-#   powershell -NoProfile -ExecutionPolicy Bypass -File notify.ps1 `
-#     -Title "DSH" -Message "turn complete" -DurationMs 6000
+#   Windows  -> dot-sources notify.windows.ps1 (Shell_NotifyIcon balloon, then
+#               a WinRT toast)
+#   macOS    -> osascript: display notification
+#   Linux    -> notify-send
 #
-# Exit code 0 means the notification was handed to the shell; anything else is
-# reported on stderr so the plugin's Settings page can show it.
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File notify.ps1 -Title "DSH" -Message "done"
+#
+# Diagnostics: -DryRun prints the resolved plan as JSON without sending
+# anything, and -Platform lets any host ask what another platform would run:
+#
+#   pwsh -File notify.ps1 -DryRun -Platform macOS -Title T -Message M
+#
+# Exit code 0 means the notification was handed to the platform; anything else
+# is reported on stderr so the plugin's Settings page can show it.
 
 [CmdletBinding()]
 param(
@@ -18,25 +26,48 @@ param(
   [string]$Kind = 'root',
   [string]$Event = 'turn-end',
   [string]$IconPath = '',
-  [int]$DurationMs = 6000
+  [int]$DurationMs = 6000,
+  [ValidateSet('auto', 'Windows', 'macOS', 'Linux')][string]$Platform = 'auto',
+  [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
 
-function ConvertTo-PlainText([string]$value) {
-  if ([string]::IsNullOrEmpty($value)) { return '' }
-  return $value.Replace('\r\n', "`n").Replace('\n', "`n").Trim()
+function Get-TargetPlatform {
+  param([string]$Requested)
+  if ($Requested -ne 'auto') { return $Requested }
+  if ($null -ne $IsWindows -and $IsWindows) { return 'Windows' }
+  if ($null -ne $IsMacOS -and $IsMacOS) { return 'macOS' }
+  if ($null -ne $IsLinux -and $IsLinux) { return 'Linux' }
+  # Windows PowerShell 5.1 defines none of the automatic platform variables.
+  if ($PSVersionTable.PSEdition -eq 'Desktop') { return 'Windows' }
+  return 'Linux'
 }
 
-function Limit-Text([string]$value, [int]$max) {
-  if ([string]::IsNullOrEmpty($value)) { return '' }
-  $flat = $value.Trim()
-  if ($flat.Length -le $max) { return $flat }
-  return $flat.Substring(0, $max - 1) + '…'
+function ConvertTo-NotifyPlainText {
+  param([string]$Value)
+  if ([string]::IsNullOrEmpty($Value)) { return '' }
+  return $Value.Replace('\r\n', "`n").Replace('\n', "`n").Trim()
 }
 
-$title = Limit-Text (ConvertTo-PlainText $Title) 120
-$body = ConvertTo-PlainText $Message
+function Limit-NotifyText {
+  param([string]$Value, [int]$Max = 250)
+  if ([string]::IsNullOrEmpty($Value)) { return '' }
+  $flat = $Value.Trim()
+  if ($flat.Length -le $Max) { return $flat }
+  return $flat.Substring(0, $Max - 1) + '…'
+}
+
+function ConvertTo-AppleScriptString {
+  param([string]$Value)
+  if ([string]::IsNullOrEmpty($Value)) { return '' }
+  # Backslash first, then the quote it introduces.
+  return $Value.Replace('\', '\\').Replace('"', '\"')
+}
+
+$target = Get-TargetPlatform $Platform
+$title = Limit-NotifyText (ConvertTo-NotifyPlainText $Title) 120
+$body = ConvertTo-NotifyPlainText $Message
 if ([string]::IsNullOrWhiteSpace($body)) { $body = $title }
 $linger = [Math]::Max(1000, [Math]::Min($DurationMs, 60000))
 $iconFile = ''
@@ -44,66 +75,67 @@ if (-not [string]::IsNullOrWhiteSpace($IconPath) -and (Test-Path -LiteralPath $I
   $iconFile = (Resolve-Path -LiteralPath $IconPath).Path
 }
 
-# --- Primary: Shell_NotifyIcon balloon -------------------------------------
-function Send-Balloon {
-  Add-Type -AssemblyName System.Windows.Forms
-  Add-Type -AssemblyName System.Drawing
-
-  $icon = $null
-  if ($iconFile -ne '' -and $iconFile.EndsWith('.ico')) {
-    $icon = New-Object System.Drawing.Icon($iconFile)
-  } else {
-    $icon = [System.Drawing.SystemIcons]::Information
-  }
-
-  $notify = New-Object System.Windows.Forms.NotifyIcon
-  try {
-    $notify.Icon = $icon
-    $notify.BalloonTipTitle = $title
-    $notify.BalloonTipText = Limit-Text $body 250
-    $notify.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
-    $notify.Visible = $true
-    $notify.ShowBalloonTip($linger)
-    # The balloon is owned by this process, so pump messages until it has been
-    # handed over to the shell, then a little longer to let it appear.
-    $deadline = (Get-Date).AddMilliseconds($linger)
-    while ((Get-Date) -lt $deadline) {
-      [System.Windows.Forms.Application]::DoEvents()
-      Start-Sleep -Milliseconds 100
+switch ($target) {
+  'macOS' {
+    $script = 'display notification "{0}" with title "{1}"' -f (ConvertTo-AppleScriptString $body), (ConvertTo-AppleScriptString $title)
+    $plan = [pscustomobject]@{
+      Platform  = 'macOS'
+      Backend   = 'osascript'
+      InProcess = $false
+      Command   = @('osascript', '-e', $script)
     }
-  } finally {
-    $notify.Visible = $false
-    $notify.Dispose()
+  }
+  'Linux' {
+    $plan = [pscustomobject]@{
+      Platform  = 'Linux'
+      Backend   = 'notify-send'
+      InProcess = $false
+      Command   = @('notify-send', '--app-name=DSH', "--expire-time=$linger", $title, $body)
+    }
+  }
+  default {
+    $plan = [pscustomobject]@{
+      Platform  = 'Windows'
+      Backend   = 'winforms'
+      InProcess = $true
+      Command   = @('<in-process>', 'notify.windows.ps1', '-Title', $title, '-Message', $body)
+    }
   }
 }
 
-# --- Fallback: WinRT toast -------------------------------------------------
-function Send-Toast {
-  [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
-  [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime]
-
-  $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent(
-    [Windows.UI.Notifications.ToastTemplateType]::ToastText02)
-  $nodes = $template.GetElementsByTagName('text')
-  $nodes.Item(0).AppendChild($template.CreateTextNode($title)) | Out-Null
-  $nodes.Item(1).AppendChild($template.CreateTextNode((Limit-Text $body 250))) | Out-Null
-
-  $toast = New-Object Windows.UI.Notifications.ToastNotification $template
-  $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
-  [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+if ($DryRun) {
+  $plan | ConvertTo-Json -Compress
+  exit 0
 }
 
-try {
-  Send-Balloon
-  exit 0
-} catch {
-  $balloonError = $_.Exception.Message
+if ($target -eq 'Windows') {
+  . (Join-Path $PSScriptRoot 'notify.windows.ps1')
+  try {
+    Invoke-WindowsNotification -Title $title -Message $body -IconPath $iconFile -DurationMs $linger
+    exit 0
+  } catch {
+    [Console]::Error.WriteLine("notify.ps1 (Windows) failed: $($_.Exception.Message)")
+    exit 1
+  }
 }
 
-try {
-  Send-Toast
-  exit 0
-} catch {
-  [Console]::Error.WriteLine("notify.ps1 failed: balloon=$balloonError; toast=$($_.Exception.Message)")
+$executable = $plan.Command[0]
+if (-not (Get-Command $executable -CommandType Application -ErrorAction SilentlyContinue)) {
+  [Console]::Error.WriteLine("notify.ps1: '$executable' was not found on PATH")
   exit 1
 }
+try {
+  if ($plan.Command.Count -gt 1) {
+    & $executable @($plan.Command[1..($plan.Command.Count - 1)])
+  } else {
+    & $executable
+  }
+} catch {
+  [Console]::Error.WriteLine("notify.ps1 ($target) failed: $($_.Exception.Message)")
+  exit 1
+}
+if ($LASTEXITCODE -ne 0) {
+  [Console]::Error.WriteLine("notify.ps1 ($target): $executable exited $LASTEXITCODE")
+  exit $LASTEXITCODE
+}
+exit 0

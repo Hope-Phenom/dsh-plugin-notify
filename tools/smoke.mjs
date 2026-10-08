@@ -206,15 +206,23 @@ check('turns shorter than the minimum stay silent', () => assert.equal(stubCalls
 state.settings = { ...state.settings, minDurationMs: 0 }
 
 if (wantNotify) {
-  section('B2. Real desktop notification (--notify)')
-  const live = createState({ env, locale: 'zh-CN' })
-  live.settings = { ...snapshot.settings, channel: 'auto' }
-  await refreshProbes(live, { force: true })
-  const report = await deliver(live, sampleEvent(), live.settings)
-  check('the real channel delivers', () => assert.equal(report.ok, true, `error: ${report.error}`))
-  console.log(`       channel: ${report.channel}`)
-  console.log(`       command: ${report.executable} ${report.argv.join(' ')}`)
-  if (report.output) console.log(`       output:  ${report.output}`)
+  section('B2. Real desktop notifications (--notify)')
+  for (const channel of ['auto', 'python', 'powershell']) {
+    const live = createState({ env, locale: 'zh-CN' })
+    live.settings = { ...snapshot.settings, channel }
+    await refreshProbes(live, { force: true })
+    if (channel === 'python' && !live.python.available) {
+      console.log('  skip python channel (no interpreter on this machine)')
+      continue
+    }
+    if (channel === 'powershell' && !live.powershell.available) {
+      console.log('  skip powershell channel (no pwsh/powershell on this machine)')
+      continue
+    }
+    const report = await deliver(live, { ...sampleEvent(), sessionTitle: `channel ${channel}` }, live.settings)
+    check(`the ${channel} channel delivers`, () => assert.equal(report.ok, true, `error: ${report.error}`))
+    console.log(`       ${report.channel}: ${report.executable} ${report.argv.join(' ')}`)
+  }
 }
 
 /* ------------------------------------------------------------------ *
