@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Notifications",
+    "description": "Desktop notification when a DSH turn ends: bundled Python and PowerShell notifiers, a custom command fallback, and its own Settings page."
+  }
+}

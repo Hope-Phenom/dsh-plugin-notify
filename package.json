@@ -1,0 +1,62 @@
+{
+  "name": "@hope_phenom/dsh-plugin-notify",
+  "version": "0.1.0",
+  "description": "Desktop notifications when a DeepSeek Harness turn ends: bundled Python/PowerShell notifier, custom command fallback, and its own Settings page.",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "notification",
+    "toast",
+    "tray"
+  ],
+  "license": "MIT",
+  "author": "Hope-Phenom",
+  "type": "module",
+  "icon": "./assets/icon.svg",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./core": "./lib/core.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "lib",
+    "scripts",
+    "locale",
+    "assets",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "smoke": "node tools/smoke.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "通知增强",
+    "description": "DSH 每轮回答结束时发送桌面通知：内置 Python 与 PowerShell 通知脚本，支持自定义命令兜底，并自带设置页。"
+  }
+}

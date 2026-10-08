@@ -1,0 +1,13 @@
+# Bundle patch of @hope_phenom/dsh-plugin-notify.
+#
+# One Host row carries the whole feature: it watches session turn events,
+# delivers the notification through the configured channel, and serves the
+# Settings page's data route. Its browser half is discovered from the
+# package.json `dsh.client` declaration, so no second row is needed.
+#
+# The row id is also the plugin's stable identity in the Settings page and in
+# the profile patch (`- id: dsh-plugin-notify`), so keep it stable across
+# versions.
+- insert:
+    - id: dsh-plugin-notify
+      name: '@hope_phenom/dsh-plugin-notify'
