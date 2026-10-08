@@ -32,6 +32,8 @@
   "files": [
     "lib",
     "scripts",
+    "!scripts/__pycache__",
+    "!scripts/**/*.pyc",
     "locale",
     "assets",
     "cordis.patch.yml",
